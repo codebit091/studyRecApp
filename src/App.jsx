@@ -1,17 +1,31 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Supabase } from "./supabase/client";
 import "./App.css";
 
 function App() {
   const [titleText, setTitleText] = useState("");
   const [timeNum, setTimeNum] = useState(0);
-  const [recList, setRecList] = useState([
-    { title: "勉強の記録1", time: 1 },
-    { title: "勉強の記録2", time: 3 },
-    { title: "勉強の記録3", time: 5 },
-  ]);
   const [titleEdit, setTitleEdit] = useState("");
   const [timeEdit, setTimeEdit] = useState();
   const [edit, setEdit] = useState(false);
+
+  const [dataBase, setDataBase] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const fetchDatabase = async () => {
+    try {
+      const { data, error } = await Supabase.from("study-record").select("*");
+      setDataBase(data);
+    } catch (error) {
+      setErrorMessage("Error fetching notes", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchDatabase();
+  }, []);
 
   const onChangeTitle = (e) => {
     return setTitleText(e.target.value);
@@ -20,47 +34,64 @@ function App() {
     const num = parseInt(e.target.value);
     return setTimeNum(num);
   };
-
-  const onClickAdd = () => {
+  const onClickAdd = async () => {
     const newRec = { title: titleText, time: timeNum };
-    const newRecList = [...recList, newRec];
-    setRecList(newRecList);
+    try {
+      const { data, error } = await Supabase.from("study-record")
+        .insert([newRec])
+        .select();
 
-    setTitleText("");
-    setTimeNum(0);
+      if (error) throw error;
+
+      await fetchDatabase();
+      setTitleText("");
+      setTimeNum(0);
+    } catch (error) {
+      setErrorMessage("Error fetching notes", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const onClickDelete = (index) => {
-    const newRecList = [...recList];
-    newRecList.splice(index, 1);
-    setRecList(newRecList);
+  const onClickDelete = async (id) => {
+    try {
+      const { data, error } = await Supabase.from("study-record")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await fetchDatabase();
+    } catch (error) {
+      setErrorMessage("Error fetching notes", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const onClickEdit = (index) => {
-    setEdit(index + 1);
-    const newRecList = [...recList];
-    setTitleEdit(newRecList[index].title);
-    setTimeEdit(newRecList[index].time);
-  };
+  // const onChangeTitleEdit = (e) => {
+  //   return setTitleEdit(e.target.value);
+  // };
+  // const onChangeTimeEdit = (e) => {
+  //   const num = parseInt(e.target.value);
+  //   return setTimeEdit(num);
+  // };
+  // const onClickEdit = (index) => {
+  //   setEdit(index + 1);
+  //   const newRecList = [...recList];
+  //   setTitleEdit(newRecList[index].title);
+  //   setTimeEdit(newRecList[index].time);
+  // };
+  // const onClickSave = (index) => {
+  //   const newRecList = [...recList];
+  //   newRecList[index] = { title: titleEdit, time: timeEdit };
+  //   setRecList(newRecList);
+  //   setEdit(false);
+  //   setTitleEdit("");
+  //   setTimeEdit(0);
+  // };
 
-  const onClickSave = (index) => {
-    const newRecList = [...recList];
-    newRecList[index] = { title: titleEdit, time: timeEdit };
-    setRecList(newRecList);
-    setEdit(false);
-    setTitleEdit("");
-    setTimeEdit(0);
-  };
-
-  const onChangeTitleEdit = (e) => {
-    return setTitleEdit(e.target.value);
-  };
-  const onChangeTimeEdit = (e) => {
-    const num = parseInt(e.target.value);
-    return setTimeEdit(num);
-  };
-
-  const recordsTimeSum = recList.reduce((sum, rec) => {
+  const recordsTimeSum = dataBase.reduce((sum, rec) => {
     return sum + rec.time;
   }, 0);
 
@@ -88,11 +119,17 @@ function App() {
         {hasInputValueAll || <p>入力されていない項目があります</p>}
       </div>
       <div>
-        <ul>
-          {recList.map((rec, index) => {
-            return (
-              <li key={index} style={{ display: "flex" }}>
-                {edit === index + 1 ? (
+        {errorMessage || isLoading ? (
+          <p>{errorMessage || "Loading..."}</p>
+        ) : (
+          <ul>
+            {dataBase.map((data) => {
+              return (
+                <li key={data.id} style={{ display: "flex" }}>
+                  <p>
+                    {data.title}：{data.time}時間
+                  </p>
+                  {/* {edit === index + 1 ? (
                   <>
                     <input
                       type="text"
@@ -118,14 +155,18 @@ function App() {
                   <button onClick={() => onClickSave(index)}>保存</button>
                 ) : (
                   <button onClick={() => onClickEdit(index)}>編集</button>
-                )}
-                <button onClick={() => onClickDelete(index)} disabled={edit}>
-                  削除
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                )} */}
+                  <button
+                    onClick={() => onClickDelete(data.id)}
+                    disabled={edit}
+                  >
+                    削除
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <p>
           合計時間：
           {recordsTimeSum}
